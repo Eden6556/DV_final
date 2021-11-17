@@ -1,0 +1,211 @@
+---
+title: "NSW COVID-19 cases DV"
+author: "Hangyu Shan"
+date: 2021-11-14
+categories: ["R"]
+tags: ["R Markdown", "plot", "regression"]
+---
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+if(!require("tidyverse", quietly = TRUE)){
+  install.packages("tidyverse")
+  require("tidyverse", quietly = TRUE)
+}
+if(!require("visNetwork", quietly = TRUE)){
+  install.packages("visNetwork")
+  require("visNetwork", quietly = TRUE)
+}
+if(!require("sf", quietly = TRUE)){
+  install.packages("sf")
+  require("sf", quietly = TRUE)
+}
+if(!require("ozmaps", quietly = TRUE)){
+  install.packages("ozmaps")
+  require("ozmaps", quietly = TRUE)
+}
+
+if(!require("leaflet", quietly = TRUE)){
+  install.packages("leaflet")
+  require("leaflet", quietly = TRUE)
+}
+if(!require("tmap", quietly = TRUE)){
+  install.packages("tmap")
+  require("tmap", quietly = TRUE)
+}
+
+data <- read_csv("confirmed_cases_table1_location (1).csv")
+clean_data <- data %>% filter(lhd_2010_code!="")
+
+```
+
+The theme of this DV is an analytic about all confirmed cases of COVID-19 in New South Wales from 1/1/2020 to 10/11/2021. COVID-19 has affected the world for nearly two years. Since Australia closed its borders to all countries last year, the overall epidemic situation has been in good condition. However, the number of infections in New South Wales began to increase rapidly in the third quarter of this year. Therefore, it mainly analyzes the three data of location, age and source of cases of confirmed patients. 
+The datasets are from https//data.nsw.gov.au website. The operating process includes collecting, cleaning and visulization. Three datasets  mainly contain notification date, confirmed cases location and cases source. There are some biases on data. Such as, the cases may not all cases in NSW because some people were not tested. 
+
+<h2>Goals</h2>
+There are four goals for this analysis. 
+<p>1.The reason of infection.</p> 
+<p>2.Mark the areas where the number of infected people is higher and the number of people is lower.</p>
+<p>3.Find out advice and lack of policy to COVID-19.</p>
+<p>4.Check out the age group which is most vulnerable to COVID-19.</p> 
+The DV can help people clearly understand whether there is a possibility of infection in their area. It can also provide advice for them to avoid being infected. 
+
+<h2>Target Audience</h2>
+My target audience can be anyone who cares about the epidemic or people who want not to be infected. Government officials are also my target audience. This DV reflects some good anti-epidemic policies and loopholes in existing policies. Government officials can make targeted improvements. My audience does not need to have good medical or geographic expertise. There are no restrictions on the age of the audience.
+
+Tips: Any one of the following graphs or charts provide interactive effects by clicking or moving the mouse on the graph, for example, more detailed related information will appear.
+
+## Plot NetWork
+## Total cases in different regions
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+nsw_count<-clean_data %>% filter(lhd_2010_name !="Sydney") %>% group_by(lhd_2010_name) %>% summarise(count=n())
+Sydney_count <-clean_data %>% filter(lhd_2010_name == "Sydney") %>% group_by(lhd_2010_name) %>% summarise(count=n())
+
+nodes<-tibble(id=c(nsw_count$lhd_2010_name,"Sydney"))
+nodes<- nodes %>% mutate(label=id,value=c(nsw_count$count,Sydney_count$count)) %>% mutate(title = paste0(id,"<br/>",value) )
+
+edges<- nsw_count %>% mutate(from="Sydney") %>% rename(to=lhd_2010_name)
+visNetwork(nodes, edges, width = "100%")
+
+
+```
+The more case nodes are larger, the fewer case nodes are smaller. By clicking every node, South Western Sydney and Western Sydney have the largest number of cases. This is the total number of cases. The following heatmap provides the number of cases in different regions in different time periods.
+
+## Plot heatmap
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#data
+t1 <- clean_data %>% filter(notification_date >= '2020-01-25',notification_date< '2020-08-11')
+t2 <- clean_data %>% filter(notification_date >= '2020-08-25',notification_date< '2021-04-25')
+t3 <- clean_data %>% filter(notification_date >= '2021-04-25',notification_date< '2021-11-11')
+lga_t1_data <- t1 %>% group_by(lga_name19) %>% summarise(count=n()) %>% rename(name=lga_name19) %>% right_join(abs_lga,by=c("name"="NAME") )
+lga_t2_data <- t2 %>% group_by(lga_name19) %>% summarise(count=n()) %>% rename(name=lga_name19) %>% right_join(abs_lga,by=c("name"="NAME") )
+lga_t3_data <- t3 %>% group_by(lga_name19) %>% summarise(count=n()) %>% rename(name=lga_name19) %>% right_join(abs_lga,by=c("name"="NAME") )
+lhd_t1_raw <- t1 %>% group_by(lhd_2010_name) %>% summarise(count=n()) 
+lhd_t1_data <- t1 %>% group_by(lhd_2010_name,lga_name19) %>% summarise(c=n()) %>% rename(name = lga_name19)  %>% left_join(lhd_t1_raw,by =c("lhd_2010_name" ="lhd_2010_name")) %>% right_join(abs_lga,by=c("name"="NAME") ) %>% select(name,count,geometry,lhd_2010_name)
+lhd_t2_raw <- t2 %>% group_by(lhd_2010_name) %>% summarise(count=n()) 
+lhd_t2_data <- t2 %>% group_by(lhd_2010_name,lga_name19) %>% summarise(c=n()) %>% rename(name = lga_name19)  %>% left_join(lhd_t2_raw,by =c("lhd_2010_name" ="lhd_2010_name")) %>% right_join(abs_lga,by=c("name"="NAME") ) %>% select(name,count,geometry,lhd_2010_name)
+
+lhd_t3_raw <- t3 %>% group_by(lhd_2010_name) %>% summarise(count=n()) 
+lhd_t3_data <- t3 %>% group_by(lhd_2010_name,lga_name19) %>% summarise(c=n()) %>% rename(name = lga_name19)  %>% left_join(lhd_t3_raw,by =c("lhd_2010_name" ="lhd_2010_name")) %>% right_join(abs_lga,by=c("name"="NAME") ) %>% select(name,count,geometry,lhd_2010_name)
+t_ozmap = tm_shape(abs_lga) +tm_polygons(col = "black", style = "quantile", n = 4)+tm_polygons()
+tmap_mode("view")
+```
+<div>
+<div style="position:relative;top:450px;left:450px;box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);border-radius: 5px;z-index:9999;width:240px;padding:10px;background-color:#fff">
+  <select id="cs1" style="width:170px;padding: 4px 0;">
+    <option value="lhd">lhd</option>
+    <option value="lga" selected>lga</option>
+  </select>
+
+  <select id="cs2" style="width:170px;margin-top:5px;padding: 4px 0;">
+    <option value="t1">2020/01/25 - 2020/08/25</option>
+    <option value="t2">2020/08/25 - 2021/04/25</option>
+    <option value="t3">2021/04/25 - 2021/11/11</option>
+  </select>
+</div>
+
+<div id="lga_t1" style="opacity:1">
+```{r,warning=FALSE, echo=FALSE, message=FALSE}
+t_ozmap + tm_shape(st_as_sf(lga_t1_data)) + tm_fill(col = "count",title="Locally acquired cases ") + tm_polygons(col = "black", style = "quantile", n = 4)
+```
+</div>
+
+<div id="lga_t2" style="position: absolute;left: -9999px;">
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+t_ozmap + tm_shape(st_as_sf(lga_t2_data)) + tm_fill(col = "count",title="Locally acquired cases ") + tm_polygons(col = "black", style = "quantile", n = 4)
+
+```
+</div>
+<div id="lga_t3" style="position: absolute;left: -9999px;">
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+t_ozmap + tm_shape(st_as_sf(lga_t3_data)) + tm_fill(col = "count",title="Locally acquired cases ") + tm_polygons(col = "black", style = "quantile", n = 4)
+
+```
+</div>
+
+<div id="lhd_t1" style="position: absolute;left: -9999px;">
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+  
+  t_ozmap + tm_shape(st_as_sf(lhd_t1_data)) + tm_fill(col = "count",popup.vars=c("lhd_2010_name","count"),title="Locally acquired cases ") + tm_polygons(col = "black", style = "quantile", n = 4)
+  
+```
+</div>
+<div id="lhd_t2" style="position: absolute;left: -9999px;">
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+  
+  t_ozmap + tm_shape(st_as_sf(lhd_t2_data)) + tm_fill(col = "count",popup.vars=c("lhd_2010_name","count"),title="Locally acquired cases ") + tm_polygons(col = "black", style = "quantile", n = 4)
+  
+```
+</div>
+<div id="lhd_t3" style="position: absolute;left: -9999px;">
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+  
+  t_ozmap + tm_shape(st_as_sf(lhd_t3_data)) + tm_fill(col = "count",popup.vars=c("lhd_2010_name","count"),title="Locally acquired cases ") + tm_polygons(col = "black", style = "quantile", n = 4)
+  
+```
+</div>
+
+<script>
+  var cs1 = document.getElementById("cs1");
+  var cs2 = document.getElementById("cs2");
+  
+  var changeVisu = function(){
+   var v1 = cs1.options[cs1.selectedIndex].value;
+   var v2 = cs2.options[cs2.selectedIndex].value;
+   var ids = ["lhd_t1","lhd_t2","lhd_t3","lga_t1","lga_t2","lga_t3"]
+   for(const id in ids){
+    document.getElementById(ids[id]).style.position="absolute";
+    document.getElementById(ids[id]).style.left="-9999px";
+   }
+   
+   document.getElementById(v1+"_"+v2).style.position="static";
+  }
+  cs1.onchange = changeVisu
+  cs2.onchange = changeVisu
+</script>
+</div>
+Obviously, regardless of whether it is in the Lhd mode or the Lga mode, in general, the cases are mostly distributed in coastal areas, and there are fewer cases in inland areas. The number of cases in and around Sydney has always been the highest. From the perspective of time, at the beginning of 2020, since the epidemic first appeared, there were signs of spreading, but it was gradually controlled as time passed. The situation has improved. However, in the second and third quarters of 2021, cases occurred in both coastal and inland areas and exceeded the scale of early 2020. This represents an outbreak of infection in the third quarter of 2021. And it continued to spread for a period of time without being well controlled.
+
+## All larger regions
+<iframe src="https://public.tableau.com/views/changesofregionsyearbar/Sheet3?:showVizHome=no&:embed=true"width="725"height="770"></iframe>
+The above table shows that most areas have started to have a large number of infection cases in the third quarter of 2021. The South Western Sydney area is the worst. It has a growth rate far exceeding that of other regions. This area is likely to be the origin and center of the outbreak. Because South Western Sydney is a larger region with many regions. A true outbreak center can be found by enumerating the number of infections in each small area.
+
+## SW Sydney
+<iframe src="https://public.tableau.com/views/casestableofSWSydney/Sheet5?:showVizHome=no&:embed=true"width="750"height="550"></iframe>
+The outbreak centre regions in South Western Sydney are Canterbury-Bankstown, Fairfield and Liverpool. These three areas are densely populated residential areas, coupled with loose control and supervision. Eventually, community transmission broke out in these three districts. This reminds people of the fact that the impact of the epidemic has not completely ended. People should wear a mask in residential areas. Government departments should focus on epidemic prevention in residential areas.
+
+
+<iframe src="https://public.tableau.com/views/sourcetableofSWSydney/Sheet3?:showVizHome=no&:embed=true"width="750"height="550"></iframe>
+Continue to observe this area in conjunction with the Likely Source. Through the above table, it can be found that the types of investigation ongoing and linked to known cases are the most. Not knowing the source of the case shows that the Victorian government lacks COVID-19 tracking and monitoring methods. This is very dangerous. Only by knowing what causes the virus infection can we improve the corresponding measures in the future. And the cases linked to known case show that many cases are spread in the community. It may be a work partner or family relationship. This reminds people to pay more attention to improving personal protection. Because I don’t know which person around me is the carrier of the virus. The number of cases of Interstate and Oversea is very low. It shows that the lockdown policy of New South Wales has played a role.
+
+<iframe src="https://public.tableau.com/views/sourcetrendsofSWSydney/Sheet3?:showVizHome=no&:embed=true"width="800"height="600"></iframe>
+The line char shows that although the number of cases from unknown sources is very high. There are not many cases with no links to known cases. This shows that the possibility of short-term exposure to infection is much lower than that of long-term contact with CONVID-19 patients.
+
+## All trend
+<iframe src="https://public.tableau.com/views/age_1_16367204997260/2_1?:showVizHome=no&:embed=true"width="800"height="600"></iframe>
+This is a line chart of the source of cases in New South Wales. The overall trend is very similar to that of South Western Sydney. The difference is that there are many more cases linked to known case. This shows that from the perspective of New South Wales as a whole, the tracking of cases is better than that done in South Western Sydney.
+
+## Single Trends
+<iframe src="https://public.tableau.com/views/total_trends/Sheet1?:showVizHome=no&:embed=true"width="800"height="600"></iframe>
+Decomposed into the figure above. During the lockdown in Victoria, the cases of Interstate and Oversea have remained almost unchanged. October 2021 is the turning point of the epidemic. The number of cases began to drop rapidly and returned to the level before the outbreak. According to data released by the NSW government, on 10.23, the percentage of fully vaccinated people over the age of 16 reached 83.7%. It shows that the high vaccination rate has prevented the spread of the COVID-19 virus. This shows that vaccines are active in preventing infection. The government should urge people to get vaccinated as soon. People should also consciously get vaccinated to improve their immunity.
+
+## Percentage
+<iframe src="https://public.tableau.com/views/percentageofcasessource/Sheet1?:showVizHome=no&:embed=true"width="800"height="680"></iframe>
+From the beginning of 2020 to November 11, 2021, the cumulative source ratio of cases can be seen. The proportion of cases linked to known cases is much higher than that of ongoing investigations. It shows that the NSW government's case tracking measures have achieved results. But the proportion of investigation ongoing cases is the second highest. This result shows that there are still problems with case tracking measures and need to be optimized. In so many cases, it is necessary to know which people have the lowest anti-infection ability. It can encourage people to increase their awareness of self-protection.
+
+## Age group situition
+```{r DV1, message=FALSE, warning=FALSE, include=FALSE}
+data <- read.csv("confirmed_cases_table2_age_group.csv")
+a <- table(data$age_group)
+#print(a)
+newone <- as.data.frame(a)
+#print(newone)
+names(newone) <- c("AgeGroups","Cases")
+print(newone)
+```
+<iframe src="https://public.tableau.com/views/age_bar/Sheet1?:showVizHome=no&:embed=true"width="800"height="600"></iframe>
+The number of people aged 0-19 is the most infected. Then it slowly declines with age. People under the age of 19 have the highest number of infections. Probably because people from 0-19 have relatively weak awareness of virus prevention and a large number of students stay in school every day. The 70-year-old man’s infection cases increases sharply due to weak resistance and poor physical fitness. This reminds people to strengthen the protection of people under 19 and over 70.
+
+<h2>Conclusion</h2>
+Four conclusions and advice can be found from all above data and graphs. First, the coastal areas, especially the Sydney metropolitan area, have the highest infection rate. People should pay attention to protection when going to these areas. Second, there are many infected people in residential areas and many cases have not been traced to the source. This means that as long as people go out of the house, people should wear a mask. The government should improve the checkin system as soon as possible. Third, people in age groups 0-19 and 70+ should get vaccinated as soon as possible and wear masks in their daily lives.
